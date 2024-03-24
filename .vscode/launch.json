@@ -1,0 +1,40 @@
+{
+  "configurations": [
+  {
+    "cwd": "${workspaceRoot}",
+    "executable": "armgcc/${config:VARISCITE.BUILD_TARGET}/gpt_capture.elf",
+    "name": "Debug Microcontroller",
+    "request": "launch",
+    "type": "cortex-debug",
+    "showDevDebugOutput": "raw",
+    "servertype": "jlink",
+    "device": "MIMX8ML8_M7",
+    "interface": "jtag",
+    "serverpath": "${config:VARISCITE.GDB_SERVER_DIR}/JLinkGDBServer",
+    "armToolchainPath": "/home/davide/var-mcuxpresso/freertos-variscite/../gcc-arm-none-eabi-10-2020-q4-major/bin",
+    "jlinkscript": "${config:VARISCITE.GDB_SERVER_DIR}/Devices/NXP/iMX8ML/NXP_iMX8M_Connect_CortexM7.JLinkScript",
+    "svdFile": "${workspaceRoot}/.vscode/MIMX8ML8_cm7.svd",
+    "cpu": "cortex-m4",
+    "rtos": "FreeRTOS",
+    "preLaunchCommands": [
+      "set mem inaccessible-by-default off",
+    ],
+    "postLaunchCommands": [
+
+      /*
+       * This delay is need after reset and/or halt issued by debugger
+       * Without this delay the below error occurs very often
+       * <Remote communication error.  Target disconnected.: Connection reset by peer>
+      */
+      "monitor sleep 1500",
+
+      "target remote localhost:50000",
+      "monitor reset",
+      "monitor halt",
+      "load"
+    ],
+    /*"runToMain": true*/
+  }
+  ]
+}
+

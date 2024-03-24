@@ -1,0 +1,28 @@
+{
+    "VARISCITE": {
+        /* Configure ARMGCC_DIR per https://variwiki.com/index.php?title=MCUXpresso */
+        "ARMGCC_DIR": "/home/davide/var-mcuxpresso/freertos-variscite/../gcc-arm-none-eabi-10-2020-q4-major",
+
+        /* Configure GDBServer dir */
+        "GDB_SERVER_DIR": "/opt/SEGGER/JLink",
+
+        /* SOC Include Path */
+        "SOC_INCLUDE_PATH" : "/home/davide/var-mcuxpresso/freertos-variscite/devices/MIMX8ML8",
+        /* RTOS Include Path */
+        "RTOS_INCLUDE_PATH" : "/home/davide/var-mcuxpresso/freertos-variscite/rtos",
+        /* MIDDLEWARE Include Path */
+        "MIDDLEWARE_INCLUDE_PATH" : "/home/davide/var-mcuxpresso/freertos-variscite/middleware",
+
+        /* Build Target */
+        "BUILD_TARGET" : "debug"
+    },
+    "files.associations": {
+        "fsl_common.h": "c",
+        "clock_config.h": "c",
+        "pin_mux.h": "c",
+        "board.h": "c",
+        "thread": "c"
+    },
+    "cmake.sourceDirectory": "${workspaceFolder}/armgcc",
+    "git.ignoreLimitWarning": true
+ }
