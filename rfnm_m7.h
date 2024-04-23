@@ -12,9 +12,9 @@
 
 typedef uint32_t vspa_complex_fixed16;
 #define FFT_SIZE 512
+#define DMA_RX_size		(256)
 
-#define RFNM_RX_BUF_CNT 7
-#define RFNM_IGN_BUFCNT 3
+#define RFNM_RX_BUF_CNT 15
 #define ERROR_MAX 0x9
 
 #define RFNM_ADC_BUFCNT (4096*4) // 4096 ~= 10ms
@@ -68,7 +68,7 @@ struct rfnm_bufdesc_tx {
 };
 
 struct rfnm_bufdesc_rx {
-	vspa_complex_fixed16 buf[FFT_SIZE];
+	vspa_complex_fixed16 buf[DMA_RX_size];
 	uint32_t adc_id;
 	uint32_t phytimer;
 	uint32_t cc;
@@ -80,11 +80,13 @@ struct rfnm_bufdesc_rx {
 };
 
 struct rfnm_la9310_status {
-	uint16_t rx_buf[8]; //use 8 to keep align, rather than RFNM_RX_BUF_CNT
+	uint16_t rx_buf[16]; //use 8 to keep align, rather than RFNM_RX_BUF_CNT
 	uint32_t age;
 	uint32_t tx_buf_id;
+	uint32_t rx_buf_id;
 	uint32_t g_errors[ERROR_MAX];
-    uint32_t pad_to_64[1];
+    uint32_t pad_to_64[4];
+    uint32_t pad_again[8]; //<-- only for M7
 };
 
 RFNM_PACKED_STRUCT(

@@ -112,12 +112,22 @@ void GPT1_IRQHandler(void)
 
 
 
+static inline int tdd_init() {
+    if(m7_dgb.tdd_available && !m7_dgb.m7_tdd_initialized) {
+        rfnm_fe_generic_init(&m7_dgb);
 
+        GPT_EnableInterrupts(GPT1, kGPT_InputCapture2InterruptEnable);
+        EnableIRQ(GPT1_IRQn);
+        GPT_StartTimer(GPT1);
+
+        m7_dgb.m7_tdd_initialized = 1;
+    }
+    
+}
 
 
 int main(void)
 {
-    uint32_t captureVal = 0;
     gpt_config_t gptConfig;
 
     //while(1);
@@ -172,6 +182,7 @@ int main(void)
 // transfer size -> MBps single ch -> MBps single ch with partial reset as you are writing -> MBps with dual channel
 
 // 0x400 -> 334 -> 360 -> 676 MBps
+// 0x600 -> x   -> x   -> 685 MBps
 // 0x800 -> 458 -> 492 -> 787 MBps
 // 0x1000 -> 588 -> 605
 // 0x2000 -> 669 -> 684
@@ -193,21 +204,24 @@ int main(void)
 
     volatile struct rfnm_bufdesc_rx *bufdesc = (struct rfnm_bufdesc_rx *) VSPA_MEM_ADDR_FROM_M7;
     volatile struct rfnm_la9310_status *rfnm_la9310_status = (struct rfnm_la9310_status *) 0x00900000;
-    volatile struct rfnm_m7_status *rfnm_m7_status = (struct rfnm_la9310_status *) (0x00900000 + 0x100);
+    volatile struct rfnm_m7_status *rfnm_m7_status = (struct rfnm_la9310_status *) (0x00900000 + 0x1000);
     //volatile struct rfnm_rx_usb_head *rfnm_rx_usb_head = (struct rfnm_la9310_status *) 0x96400000;
+
+    memset(&m7_dgb, 0, sizeof(struct rfnm_m7_dgb));
+
+    uint32_t last_read_buf = 0;
     
     
     int32_t dma_buf_last_map[2] = {-1, -1};
 
-    int16_t buffs_to_ign[RFNM_IGN_BUFCNT];
-    int16_t last_ign_buf = 0;
+    int16_t buffs_to_ign[RFNM_RX_BUF_CNT];
 
-    for(int i = 0; i < RFNM_IGN_BUFCNT; i++) {
-        buffs_to_ign[i] = -1;
+    for(int i = 0; i < RFNM_RX_BUF_CNT; i++) {
+        buffs_to_ign[i] = 0;
     }
 
     rfnm_la9310_status[0].age = 0;
-    while(rfnm_la9310_status[0].age == 0) {}
+    while(rfnm_la9310_status[0].age == 0) {tdd_init();}
 
     rfnm_m7_status->rx_head = 0;
 
@@ -216,7 +230,9 @@ int main(void)
 
 
     while(1) {
-
+        
+        tdd_init();
+        
         for(int dma = 0; dma < 2; dma++) {
             uint32_t off = 0x200 * dma;
 
@@ -230,14 +246,12 @@ int main(void)
                 continue;
             }
 
-            if(dma_buf_last_map[dma] != -1) {
-                bufdesc[dma_buf_last_map[dma]].read = 1;
-                dma_buf_last_map[dma] = -1;
-            }
+            //if(dma_buf_last_map[dma] != -1) {
+            //    bufdesc[dma_buf_last_map[dma]].read = 1;
+            //    dma_buf_last_map[dma] = -1;
+            //}
 
-            
-
-            uint16_t ages[4];
+            uint32_t ages[4];
             
             for(int i = 0; i < 4; i++) {
                 ages[i] = rfnm_la9310_status[i].age;
@@ -273,45 +287,55 @@ int main(void)
 
             rfnm_m7_status->tx_buf_id = rfnm_la9310_status[winning_age_id].tx_buf_id;
 
+            volatile uint32_t rx_buf_id = rfnm_la9310_status[winning_age_id].rx_buf_id;
 
-            int win_b = -1;
-            int win_age = 0;
-
-            for(int b = 0; b < RFNM_RX_BUF_CNT; b++) {
-                uint16_t t_age = rfnm_la9310_status[winning_age_id].rx_buf[b];
-                if(0xffff != t_age && t_age > win_age) {
-                    int must_ignore = 0;
-                    for(int i = 0; i < RFNM_IGN_BUFCNT; i++) {
-                        if(b == buffs_to_ign[i]) {
-                            must_ignore = 1;
-                        }
-                    }
-                    if(!must_ignore) {
-                        win_b = b;
-                        win_age = t_age;
-                    }
-                    
-                    
-                }
-            }
-
-#if 0
-            int read_b = -1;
-            for(int b = 0; b < RFNM_RX_BUF_CNT; b++) {
-                if(read_b >= 0) {
-                    if(rfnm_buf_age[b] > rfnm_buf_age[read_b]) {
-                        read_b = b;
-                    }
-                } else {
-                    if(rfnm_buf_age[b] > 0) {
-                        read_b = b;
-                    }
-                }
-            }
-#endif
-
-            if(win_b < 0) {
+            if(last_read_buf == rx_buf_id) {
                 continue;
+            }
+
+            volatile uint32_t tmp_read, tmp_write, new_read, new_write, reading, has_overflown;
+
+            tmp_read = last_read_buf;
+            tmp_write = rfnm_m7_status->rx_head;
+            
+
+            has_overflown = 0;
+            reading = 0;
+
+            while(1) {
+
+                new_read = tmp_read;
+                new_write = tmp_write;
+
+                if(++tmp_read == RFNM_RX_BUF_CNT) {
+                    tmp_read = 0;
+                    has_overflown = 1;
+                }
+
+                if(++tmp_write == RFNM_ADC_BUFCNT) {
+                    tmp_write = 0;
+                    has_overflown = 1;
+                }
+
+                if(buffs_to_ign[tmp_read] == rfnm_la9310_status[winning_age_id].rx_buf[tmp_read]) {
+                    break;
+                }
+
+                if(tmp_read == rx_buf_id) {
+                    break;
+                }
+                
+                reading++;
+
+                if(has_overflown) {
+                    new_read = tmp_read;
+                    new_write = tmp_write;
+                    break;
+                }
+            }
+            
+            if(!reading) {
+                goto no_dma;
             }
 
             
@@ -324,10 +348,10 @@ int main(void)
 
             reg = DMA_TRANSFER_SIZE_OFF_RDCH_0 + off; 
             //*reg =  0x40000;
-            *reg =  sizeof(struct rfnm_bufdesc_rx);
+            *reg =  sizeof(struct rfnm_bufdesc_rx) * reading;
             reg = DMA_SAR_LOW_OFF_RDCH_0 + off; 
             //*reg = 0x1C010A00;
-            *reg =  0x1F400000 + (win_b * sizeof(struct rfnm_bufdesc_rx)); 
+            *reg =  0x1F400000 + (last_read_buf * sizeof(struct rfnm_bufdesc_rx)); 
             //*reg =  0x1c000000;
             //*reg = 0x1f000000;
             reg = DMA_SAR_HIGH_OFF_RDCH_0 + off; 
@@ -342,24 +366,26 @@ int main(void)
             *reg =  dma;
 
             can_setup_dma[dma] = 0;
-            dma_buf_last_map[dma] = win_b;
+            //dma_buf_last_map[dma] = win_b;
 
-            buffs_to_ign[last_ign_buf] = win_b;
+            //buffs_to_ign[win_b] = win_age;
 
-            if(++last_ign_buf == RFNM_IGN_BUFCNT) {
-                last_ign_buf = 0;
+            for(int q = last_read_buf; q < (last_read_buf + reading); q++) {
+                buffs_to_ign[q] = rfnm_la9310_status[winning_age_id].rx_buf[q];
             }
+
+no_dma:
+            last_read_buf = new_read;
+            rfnm_m7_status->rx_head = new_write;
 
             //rfnm_buf_age[(winning_age_id * 32) + win_b] = 0xffff;
 
             //rfnm_buf_age[read_b] = 0; // meh what a shitshow
             //rfnm_buf_age[(win_b * 32)] = 0xffff; // meh what a shitshow
 
-            cnt++;
+            cnt += reading;
 
-            if(++rfnm_m7_status->rx_head == RFNM_ADC_BUFCNT) {
-                rfnm_m7_status->rx_head = 0;
-            }
+            
         }
 
         
@@ -376,62 +402,5 @@ int main(void)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-     
-    memset(&m7_dgb, 0, sizeof(struct rfnm_m7_dgb));
-
-
-    while (true)
-    {
-
-        int i;
-#if 0
-        for(i = 1; i < 3; i++) {
-                rfnm_fe_manual_clock(0, i);
-        }
-        rfnm_fe_manual_clock(0, 7);
-#endif
-        if(m7_dgb.tdd_available && !m7_dgb.m7_tdd_initialized) {
-            rfnm_fe_generic_init(&m7_dgb);
-
-            GPT_EnableInterrupts(GPT1, kGPT_InputCapture2InterruptEnable);
-            EnableIRQ(GPT1_IRQn);
-            GPT_StartTimer(GPT1);
-
-            m7_dgb.m7_tdd_initialized = 1;
-        }
-
-        
-
-        //GPIO_PinWrite(GPIO4, 30U, 0U);
-        //SDK_DelayAtLeastUs(10000, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
-
-        //GPIO_PinWrite(GPIO4, 30U, 1U);
-        //SDK_DelayAtLeastUs(10000, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
-        /* Check whether occur interupt */
-        if (true == gptIsrFlag)
-        {
-            captureVal = GPT_GetInputCaptureValue(GPT1, kGPT_InputCapture_Channel2);
-            //PRINTF("\r\n Capture value =%x\r\n", captureVal);
-            gptIsrFlag = false;
-        }
-        else
-        {
-  //          __WFI();
-        }
-    }
 }
+  //          __WFI();
