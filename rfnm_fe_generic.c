@@ -85,7 +85,7 @@ void rfnm_fe_manual_clock(int dgb_id, int id) {
     *(gpio[6] + 2) = cur_gpio_la;
 #else
     // enable latch before changing output    
-	rfnm_gpio_clear(dgb_id, RFNM_DGB_LA_FE_CLK);
+	rfnm_gpio_set(dgb_id, RFNM_DGB_LA_FE_CLK);
 #endif
 
     // change output
@@ -172,13 +172,13 @@ void rfnm_fe_manual_clock(int dgb_id, int id) {
 
 	// latch read-in
 #ifdef GOFAST    
-    cur_gpio_la |= (1 << 24);
-    *(gpio[6] + 2) = cur_gpio_la;
     cur_gpio_la &= ~(1 << 24);
     *(gpio[6] + 2) = cur_gpio_la;
+	cur_gpio_la |= (1 << 24);
+    *(gpio[6] + 2) = cur_gpio_la;
 #else
-    rfnm_gpio_set(dgb_id, RFNM_DGB_LA_FE_CLK);
-	rfnm_gpio_clear(dgb_id, RFNM_DGB_LA_FE_CLK);
+    rfnm_gpio_clear(dgb_id, RFNM_DGB_LA_FE_CLK);
+	rfnm_gpio_set(dgb_id, RFNM_DGB_LA_FE_CLK);
 #endif    
 }
 
