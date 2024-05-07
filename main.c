@@ -189,7 +189,7 @@ int main(void)
 // 0x4000 -> 730 -> 737 -> 780 MBps
 
 
-    uint32_t *reg;
+    volatile uint32_t *reg;
     volatile int cnt = 0;
 
     reg = DMA_READ_ENGINE_EN_OFF; 
@@ -219,6 +219,130 @@ int main(void)
     for(int i = 0; i < RFNM_RX_BUF_CNT; i++) {
         buffs_to_ign[i] = 0;
     }
+
+
+
+
+
+#if 0
+
+    reg = DMA_WRITE_ENGINE_EN_OFF; 
+    *reg = 0x0;
+
+    reg = DMA_WRITE_ENGINE_EN_OFF; 
+    *reg = 0x1;
+    reg = DMA_WRITE_INT_MASK_OFF; 
+    *reg = 0x0;
+
+    int multi = 1;
+
+    while(1) {
+                
+        for(int dma = 0; dma < 2; dma++) {
+            uint32_t off = 0x200 * dma;
+
+#if 1
+            reg = DMA_CH_CONTROL1_OFF_WRCH_0 + off;
+            //while((*reg & 0x60) != 0x60) { }
+
+            if((*reg & 0x60) == 0x60) {
+                can_setup_dma[dma] = 1;
+            }
+#else
+
+            reg = DMA_WRITE_INT_STATUS_OFF;
+            if((*reg & (1 << dma))) {
+                can_setup_dma[dma] = 1;
+            }
+
+#endif       
+            if(!can_setup_dma[dma]) {
+                continue;
+            }
+
+            reg = DMA_WRITE_INT_CLEAR_OFF;
+            *reg = 1 << dma;
+            
+            reg = DMA_CH_CONTROL1_OFF_WRCH_0 + off; 
+            //*reg = 0x04000008;
+            *reg = 0x00000008 ;//| (1<<25);
+            //*reg = 0x00000000 ;//| (1<<25);
+
+            reg = DMA_TRANSFER_SIZE_OFF_WRCH_0 + off; 
+            //*reg =  0x40000;
+            *reg =  sizeof(struct rfnm_bufdesc_rx) * multi;
+            
+            reg = DMA_SAR_LOW_OFF_WRCH_0 + off; 
+            //*reg = 0x1C010A00;
+            *reg =  0x96400000 + (dma * multi * sizeof(struct rfnm_bufdesc_rx)); 
+            //*reg =  0x1c000000;
+            //*reg = 0x1f000000;
+            reg = DMA_SAR_HIGH_OFF_WRCH_0 + off; 
+            *reg =  0x00000000;
+            reg = DMA_DAR_LOW_OFF_WRCH_0 + off; 
+            *reg =  0x1F400000 + (dma * multi * sizeof(struct rfnm_bufdesc_rx));
+            reg = DMA_DAR_HIGH_OFF_WRCH_0 + off; 
+            *reg =  0x00000000;
+
+            
+            reg = DMA_WRITE_DOORBELL_OFF; 
+            *reg =  dma;
+
+            can_setup_dma[dma] = 0; 
+
+
+            reg = DMA_CH_CONTROL1_OFF_WRCH_0 + off;
+            while((*reg & 0x60) == 0) { }
+            //if((*reg & 0x60) == 0) {
+            //    can_setup_dma[dma] = 1; 
+            //}
+            
+            cnt += 1;
+        }
+
+    }
+
+
+
+
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     rfnm_la9310_status[0].age = 0;
     while(rfnm_la9310_status[0].age == 0) {tdd_init();}
@@ -337,14 +461,13 @@ int main(void)
             if(!reading) {
                 goto no_dma;
             }
-
+            
+            reg = DMA_READ_INT_CLEAR_OFF;
+            *reg = 1 << dma;
             
             reg = DMA_CH_CONTROL1_OFF_RDCH_0 + off; 
             //*reg = 0x04000008;
             *reg = 0x00000008 ;//| (1<<25);
-
-            reg = DMA_READ_INT_CLEAR_OFF;
-            *reg = 0x1;
 
             reg = DMA_TRANSFER_SIZE_OFF_RDCH_0 + off; 
             //*reg =  0x40000;
