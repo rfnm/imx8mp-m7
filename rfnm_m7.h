@@ -14,7 +14,7 @@ typedef uint32_t vspa_complex_fixed16;
 #define FFT_SIZE 512
 #define DMA_RX_size		(256)
 
-#define RFNM_RX_BUF_CNT 15
+#define RFNM_RX_BUF_CNT 14
 #define ERROR_MAX 0x9
 
 #define RFNM_ADC_BUFCNT (4096*4) // 4096 ~= 10ms
@@ -77,6 +77,7 @@ struct rfnm_bufdesc_rx {
 	uint32_t read;
 	// (64 - (4 * 5)) / 4 = 22
 	uint32_t pad_to_64[10];
+	uint32_t pad_to_128[16];
 };
 
 struct rfnm_la9310_status {

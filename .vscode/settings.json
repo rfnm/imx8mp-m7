@@ -21,8 +21,10 @@
         "clock_config.h": "c",
         "pin_mux.h": "c",
         "board.h": "c",
-        "thread": "c"
+        "thread": "c",
+        "random": "c"
     },
     "cmake.sourceDirectory": "${workspaceFolder}/armgcc",
-    "git.ignoreLimitWarning": true
+    "git.ignoreLimitWarning": true,
+    "cortex-debug.variableUseNaturalFormat": true
  }
